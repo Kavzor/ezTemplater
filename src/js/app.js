@@ -1,4 +1,4 @@
-prepareTemplate('app-header', {
+ezTemplater.prepare('app-header', {
   person: {
     name: 'Jakob',
     age: 21,

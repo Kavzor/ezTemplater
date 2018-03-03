@@ -28,7 +28,7 @@ static/app-header.html
 With configuration
 app.js
 ```javascript
-prepareTemplate('app-header', {
+ezTemplater.prepare('app-header', {
   configuration: {      //configuration is optional
     preload: true,
     srcPath: "static/",
@@ -50,7 +50,7 @@ prepareTemplate('app-header', {
 ```
 Without configuration
 ```javascript
-prepareTemplate('app-header', {
+ezTemplater.prepare('app-header', {
   person: {
     name: 'Jakob',
     age: 21,
