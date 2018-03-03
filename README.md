@@ -28,7 +28,7 @@ static/app-header.html
 With configuration
 app.js
 ```javascript
-loadHolder('app-header', {
+prepareTemplate('app-header', {
   configuration: {      //configuration is optional
     preload: true,
     srcPath: "static/",
@@ -50,7 +50,7 @@ loadHolder('app-header', {
 ```
 Without configuration
 ```javascript
-var header = loadHolder('app-header', {
+prepareTemplate('app-header', {
   person: {
     name: 'Jakob',
     age: 21,

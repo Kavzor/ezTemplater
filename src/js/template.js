@@ -98,7 +98,7 @@ function extractProperties(template) {
   return properties;
 }
 
-function loadHolder(holder, data, callback) {
+function prepareTemplate(holder, data, callback) {
   var srcPath = "static/";
   var preload = false;
   var config = data.configuration;

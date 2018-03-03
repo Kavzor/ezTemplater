@@ -1,4 +1,4 @@
-var header = loadHolder('app-header', {
+prepareTemplate('app-header', {
   person: {
     name: 'Jakob',
     age: 21,
