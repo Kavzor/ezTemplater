@@ -76,4 +76,4 @@ A goal with ezTemplater is that it's optional whatever you want to do the config
 - preload is default false
 - srcPath is default /static/ with .html as extension
 - callback is required to work with the template, you either define it with configuration as "ready" property or use it as a third paramter without the optional configuration
-- currently (to enforce best practise) the name of the template is required to match the element selector, e.g. if you want a <flight-description></flight-description> template you are required to have a template file called flight-description.html
+- currently (to enforce best practise) the name of the template is required to match the element selector, e.g. if you want a &lt;flight-description&gt;&lt;/flight-description&gt; template you are required to have a template file called flight-description.html
