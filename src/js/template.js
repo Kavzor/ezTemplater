@@ -98,15 +98,14 @@ function extractProperties(template) {
   return properties;
 }
 
-function loadHolder(holder, data) {
+function loadHolder(holder, data, callback) {
   var srcPath = "static/";
   var preload = false;
-  var callback = undefined;
   var config = data.configuration;
   if(config) {
     srcPath = config.srcPath == undefined ? srcPath : config.srcPath;
     preload = config.preload;
-    callback = config.ready;
+    callback = config.ready == undefined ? callback : config.ready;
   } 
   getTemplate(`${srcPath}${holder}.html`, template => {
     var template = load(template, data).holder(holder);
