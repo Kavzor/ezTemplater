@@ -1,19 +1,34 @@
-ezTemplater.prepare('app-header', {
-  person: {
-    name: 'Jakob',
-    age: 21,
-    year: {
-      month: 12
-    }
+ezTemplate.inflate('app-header', {
+  data: {
+      person: {
+      name: "jakob",
+      details: {
+        age: 21
+      }
+    },
+    car: {
+      drovn: 20
+    },
+    fruites: [
+      {
+        name: 'apple',
+        age: 32
+      },
+      {
+        name: 'pineapple',
+        age: 12
+      }
+    ]
   },
-  thing : {
-    bla: "hej"
+  configuration: {
+    preload: true,   //change to false to preload content or de-comment template.refreshContent() below
+    path: 'static/app-header.html' //Default is tagname + .html under static folder
   }
-}, template => {
-  template.refreshContent(); //Must be called anytime you change data in the template
-  console.log(template.data); //template.data lets you access all the data that you set and manipulate it
-  
+});
+
+ezTemplate.getWhenReady('app-header', (template) => {
   var person = template.data.person;
-  person.name = "Anders"; //Changes the name of person object
-  template.refreshContent(); //Must be called to refresh content
+  person.name = "anders";
+
+  //template.refreshContent();
 });

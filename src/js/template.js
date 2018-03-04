@@ -1,6 +1,12 @@
+'use strict';
 
-var ezTemplater = (function() {
-  function getTemplate(path, callback) {
+
+
+var ezTemplate = (function() {
+  const TRIES_THRESHOLD = 200;
+  var templates = new Array();
+
+  function getExternalTemplate(path, callback) {
     var ajax = new XMLHttpRequest();
     ajax.onreadystatechange = function() {
       if(this.readyState === 4 && this.status === 200){
@@ -10,128 +16,192 @@ var ezTemplater = (function() {
     ajax.open('GET', path);
     ajax.send();
   }
-  
-  
-  function Template(template) {
-    this.format = template.format;
-    this.data = template.data;
-    this.properties = template.properties;
-   
-    this.format = this.format.replace(/\n/g, "");
-    this.format = this.format.split(/\s+/).join(" ");
-    this.format = this.format.replace(/{{ /g, "{{").replace(/ }}/g, "}}");
+
+  function getConfigurations(template, element) {
+    var configurations = {}
+    var jsConfigurations = template.configuration;
+    jsConfigurations = jsConfigurations === undefined ? {} : jsConfigurations;
+
+    var jsPreload = jsConfigurations.preload;
+    var elPreload = element.getAttribute('.preload');
+    configurations.preload = jsPreload === undefined ? elPreload : jsPreload;
+    configurations.preload = configurations.preload === null ? true : configurations.preload;
     
-    this.skeleton = this.format;
-   
+    var jsPath = jsConfigurations.path;
+    var elPath = element.getAttribute('.path');
+    configurations.path = jsPath === undefined ? elPath : jsPath;
+    configurations.path = configurations.path == null ? 'static/' + element.tagName.toLowerCase() + '.html' : configurations.path;
+
+    return configurations;
   }
-  
-  Template.prototype.ready = function(callback) {
-    callback(this.data);
-  }
-  
-  Template.prototype.holder = function(element) {
-    this.element = document.querySelector(element);
-    return this;
-  }
-  
-  Template.prototype.preload = function() {
-    this.refreshContent();
-    return this;
-  }
-  
-  Template.prototype.getData = function() {
-    return this.data;
-  }
-  
-  Template.prototype.refreshContent = function() {
-    this.format = this.skeleton;
-    this.properties.forEach(property => {
-      let value = this.data;
-      /*try{
-        console.log("var " + property.split(".")[0] + " = JSON.parse(" + this.data + ");");
-        //eval("var " + property.split(".")[0] + " = JSON.parse(" + this.data + ");");
-      }
-      catch(err){
-        //console.log(err);
-      }*/
-      if(isTenary(property)){
-        value = eval(property);
-      }
-      else {
-        let parts = property.split(".");
-        parts.forEach(part => {
-          value = value[part];
-        });
-      }
-      this.putContent(property, value);
+
+  var inflate = function(selector, template) {
+    var element = document.querySelector(selector);
+    var config = getConfigurations(template, element);
+
+    var templateIndex = templates.push({tagName: element.tagName.toLowerCase()}) - 1;
+    
+    config.templateIndex = templateIndex;
+
+    loadFromExternalSource(config, {
+      element: element,
+      data: template.data,
+      ready: template.ready
     });
-    this.element.innerHTML = this.format;
   }
-  
-  Template.prototype.putContent = function(property, value) {
-    this.format = this.format.replace("{{" + property + "}}", value);
+
+  function loadFromExternalSource(config, template){
+    getExternalTemplate(config.path, skeleton => {
+      var index = config.templateIndex;
+      template.skeleton = skeleton;
+      templates[index].template = new EzTemplate(template);
+      
+      if(typeof config.preload === 'string') {
+        config.preload = (config.preload == "true");
+      }
+      if(config.preload) {
+        templates[index].template.refreshContent();
+      }
+    });
   }
-  
-  function isTenary(expression){
-    console.log(expression);
-    var firstSpecialChar = expression.indexOf("?");
-    var secondSpecialChar = expression.indexOf('"');
-    var thirdSpecialChar = expression.indexOf(":");
-    if(firstSpecialChar !== -1 && secondSpecialChar !== -1 && thirdSpecialChar !== -1){
-      return (firstSpecialChar < secondSpecialChar && secondSpecialChar < thirdSpecialChar);
+
+  var getWhenReady = function(target, whenReady, tries = 0) {
+    var ezTemplate = templates.find(template => {
+      return template.tagName.toLowerCase() === target;
+    });
+    if(ezTemplate.template === undefined){
+      setTimeout(() => {
+        if (tries > TRIES_THRESHOLD) {
+          throw `Could not find '${target}', check your spelling`;
+        }
+        else {
+          getWhenReady(target, whenReady, ++tries);
+        }
+      }, 10);
     }
     else {
-      return false;
+      whenReady(ezTemplate.template);
     }
   }
   
-  
-  function extractProperties(template) {
-    let properties = template.split("{{").join("}}").split("}}");
-    properties = properties.filter(property => {
-      return (property.indexOf("<") === -1 
-              && property.indexOf(">") === -1
-              && property.trim().length > 0)
-              && property.indexOf(".") !== -1;
-    });
-    properties = properties.map(property => {
-      return property.trim();
-    });
-    return properties;
-  }
-  
-  function load(skeleton, data){
-    let properties = extractProperties(skeleton);
-    return new Template({
-      properties: properties,
-      format: skeleton,
-      data: data
-    });
-  }  
-
-  var prepare = function(holder, data, callback) {
-    var srcPath = "static/";
-    var preload = false;
-    var config = data.configuration;
-    if(config) {
-      srcPath = config.srcPath == undefined ? srcPath : config.srcPath;
-      preload = config.preload;
-      callback = config.ready == undefined ? callback : config.ready;
-    } 
-    getTemplate(`${srcPath}${holder}.html`, template => {
-      var template = load(template, data).holder(holder);
-      if(preload) {
-        template.preload();
-      }
-      if(callback) {
-        callback(template);
-      }
-    });
-  }
-
   return {
-    prepare: prepare
+    inflate: inflate,
+    getWhenReady: getWhenReady
   }
-  
 })();
 
+
+
+let handler = {
+  get(target, key) {
+    if (typeof target[key] === 'object' && target[key] !== null) {
+      return new Proxy(target[key], handler);
+    } else {
+      return target[key];
+    }
+  },
+  set: function(object, property, value) {
+    object[property] = value;
+  }
+}
+
+function extractUsedProperties(skeleton){
+  let properties = skeleton.split("{{").join("}}").split("}}");
+  properties = properties.filter(property => {
+    return (property.indexOf("<") === -1 
+            && property.indexOf(">") === -1
+            && property.trim().length > 0)
+            && property.indexOf(".") !== -1;
+  });
+  properties = properties.map(property => {
+    return property.trim();
+  });
+  return properties;
+}
+
+function EzTemplate(template) {
+  this.element = template.element;
+  this.ready = template.ready;
+  this.data = new Proxy(template.data, handler);
+
+  //make template more code friendly by removing most whitespaces and line-breaks
+  template.skeleton = template.skeleton.replace(/\n/g, "");
+  template.skeleton = template.skeleton.split(/\s+/).join(" ");
+  template.skeleton = template.skeleton.replace(/{{ /g, "{{").replace(/ }}/g, "}}");
+  
+  this.skeleton = template.skeleton;
+  this.properties = extractUsedProperties(this.skeleton);
+} 
+
+EzTemplate.prototype.putContent = function(rawContent, property, value) {
+   return rawContent.replace("{{" + property + "}}", value);
+}
+
+
+EzTemplate.prototype.refreshContent = function() {
+  console.log(this.skeleton);
+  this.element.innerHTML = this.skeleton;
+  this.handleDeepProperties(this.element.getElementsByTagName('*'));
+  /*this.properties.forEach(property => {
+    let value = this.data;
+    
+    let parts = property.split(".");
+    parts.forEach(part => {
+      value = value[part];
+    });
+  
+    this.putContent(property, value);
+  });
+  expandOnFor(this.element.querySelector('*'));*/
+}
+
+EzTemplate.prototype.handleDeepProperties = function(childElements) {
+  for(let index = 0; index < childElements.length; index++) {
+    var childElement = childElements[index];
+    var content = childElement.firstChild.nodeValue;
+
+    var forAttribute = childElement.getAttribute('.for');
+    if(forAttribute !== null) {
+      var arrayStartIndex = forAttribute.lastIndexOf(' ');
+      var arrayName = forAttribute.substr(arrayStartIndex).trim();
+
+      var propertyStartIndex = forAttribute.indexOf(' ');
+      var propertyName = forAttribute.substr(propertyStartIndex).trim();
+      var propertyEndIndex = propertyName.indexOf(' ');
+      var propertyName = propertyName.substr(0, propertyEndIndex);
+
+      var childContent = childElement.innerHTML;
+      while (childElement.firstChild) childElement.removeChild(childElement.firstChild); //empty childElement
+      var properties = extractUsedProperties(childContent);
+
+      this.data[arrayName].forEach(value => {
+        properties.forEach(property => {
+          let parts = property.split(".");
+          let item = value;
+          parts.forEach(part => {
+            if(part !== propertyName){
+              item = item[part];
+            }
+          });
+          childContent = childContent.replace('{{' + property + '}}', item);
+        });
+        childElement.innerHTML += childContent; 
+      });
+    }
+    else {
+      this.properties.forEach(property => {
+        let value = this.data;
+        
+        let parts = property.split(".");
+        parts.forEach(part => {
+          if(value !== undefined){
+            value = value[part];
+          }
+        });
+
+        content = this.putContent(content, property, value);
+        childElement.firstChild.nodeValue = content;
+      });
+    }
+  } 
+}
