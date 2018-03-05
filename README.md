@@ -26,14 +26,13 @@ static/app-header.html
 <header>
   {{ person.name }} {{ person.details.age }}
   
-  //next version will use syntax "fruit : fruites" rather than the full declaration
-  <ul .for="let fruit of fruites">
+  <ul .for="fruit_fruites">
     <li>{{fruit.age}} : {{fruit.name}}</li>
   </ul>
 </header>
 
 
-<div .for="let fruit of fruites">
+<div .for="fruit_fruites">
   <a href="{{fruit.name}}">{{fruit.name}}</a>
 </div>
 ```
@@ -69,7 +68,7 @@ ezTemplate.getWhenReady('app-header', (template) => {
   var person = template.data.person;
   person.name = "anders";
 
-  //Must be called to reflect changes, working to automate the process with proxies
+  //Must be called to reflect changes
   template.refreshContent();
 });
 ```
@@ -86,7 +85,7 @@ index.html
 </body>
 ```
 
-
+app.js
 ```javascript
 ezTemplate.inflate('app-header', {
   data: {
@@ -123,6 +122,50 @@ ezTemplate.getWhenReady('app-header', (template) => {
   //template.refreshContent();
 });
 ```
+
+app.js with proxies
+```javascript
+ezTemplate.inflate('app-header', {
+  data: {
+      person: {
+      name: "jakob",
+      details: {
+        age: 21
+      }
+    },
+    car: {
+      drovn: 20
+    },
+    fruites: [
+      {
+        name: 'apple',
+        age: 32
+      },
+      {
+        name: 'pineapple',
+        age: 12
+      }
+    ]
+  },
+  configuration: {
+    preload: true,   //change to false to preload content or de-comment template.refreshContent() below
+    path: 'static/app-header.html' //Default is tagname + .html under static folder
+  }
+});
+
+//Sometimes it can be annoying to call refreshContent for minor updates, using proxies instead will automatically reflect changes to the view and also sync to non-proxy template data
+ezTemplate.getWhenReady('app-header', (template) => {
+  var person = template.data.person;
+  person.name = "anders"; //this won't sync until you call refreshContent
+
+  var proxyPerson = template.proxy.data.person;
+  proxyPerson.name = 'Jakob'; //Will automatically refresh all content, also overwrites any previous changes made to the same property in the non-proxy instance
+
+  //template.refreshContent();
+});
+```
+
+
 ### defaults
 A goal with ezTemplater is that it's optional whatever you want to do the configurations yourself or let ez do it for you
 - preload is default true
