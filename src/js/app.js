@@ -28,7 +28,8 @@ ezTemplate.inflate('app-header', {
 
 ezTemplate.getWhenReady('app-header', (template) => {
   var person = template.data.person;
-  person.name = "anders";
-
-  //template.refreshContent();
+  var proxyPerson = template.proxy.data.person;
+  
+  
+  template.refreshContent();
 });

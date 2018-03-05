@@ -1,111 +1,18 @@
 'use strict';
 
 
-
-var ezTemplate = (function() {
-  const TRIES_THRESHOLD = 200;
-  var templates = new Array();
-
-  function getExternalTemplate(path, callback) {
-    var ajax = new XMLHttpRequest();
-    ajax.onreadystatechange = function() {
-      if(this.readyState === 4 && this.status === 200){
-        callback(this.response);
-      }
-    }
-    ajax.open('GET', path);
-    ajax.send();
-  }
-
-  function getConfigurations(template, element) {
-    var configurations = {}
-    var jsConfigurations = template.configuration;
-    jsConfigurations = jsConfigurations === undefined ? {} : jsConfigurations;
-
-    var jsPreload = jsConfigurations.preload;
-    var elPreload = element.getAttribute('.preload');
-    configurations.preload = jsPreload === undefined ? elPreload : jsPreload;
-    configurations.preload = configurations.preload === null ? true : configurations.preload;
-    
-    var jsPath = jsConfigurations.path;
-    var elPath = element.getAttribute('.path');
-    configurations.path = jsPath === undefined ? elPath : jsPath;
-    configurations.path = configurations.path == null ? 'static/' + element.tagName.toLowerCase() + '.html' : configurations.path;
-
-    return configurations;
-  }
-
-  var inflate = function(selector, template) {
-    var element = document.querySelector(selector);
-    var config = getConfigurations(template, element);
-
-    var templateIndex = templates.push({tagName: element.tagName.toLowerCase()}) - 1;
-    
-    config.templateIndex = templateIndex;
-
-    loadFromExternalSource(config, {
-      element: element,
-      data: template.data,
-      ready: template.ready
-    });
-  }
-
-  function loadFromExternalSource(config, template){
-    getExternalTemplate(config.path, skeleton => {
-      var index = config.templateIndex;
-      template.skeleton = skeleton;
-      templates[index].template = new EzTemplate(template);
-      
-      if(typeof config.preload === 'string') {
-        config.preload = (config.preload == "true");
-      }
-      if(config.preload) {
-        templates[index].template.refreshContent();
-      }
-    });
-  }
-
-  var getWhenReady = function(target, whenReady, tries = 0) {
-    var ezTemplate = templates.find(template => {
-      return template.tagName.toLowerCase() === target;
-    });
-    if(ezTemplate.template === undefined){
-      setTimeout(() => {
-        if (tries > TRIES_THRESHOLD) {
-          throw `Could not find '${target}', check your spelling`;
-        }
-        else {
-          getWhenReady(target, whenReady, ++tries);
-        }
-      }, 10);
-    }
-    else {
-      whenReady(ezTemplate.template);
+function getExternal(path, callback) {
+  var ajax = new XMLHttpRequest();
+  ajax.onreadystatechange = function() {
+    if(this.readyState === 4 && this.status === 200){
+      callback(this.response);
     }
   }
-  
-  return {
-    inflate: inflate,
-    getWhenReady: getWhenReady
-  }
-})();
-
-
-
-let handler = {
-  get(target, key) {
-    if (typeof target[key] === 'object' && target[key] !== null) {
-      return new Proxy(target[key], handler);
-    } else {
-      return target[key];
-    }
-  },
-  set: function(object, property, value) {
-    object[property] = value;
-  }
+  ajax.open('GET', path);
+  ajax.send();
 }
 
-function extractUsedProperties(skeleton){
+function extractProperties(skeleton){
   let properties = skeleton.split("{{").join("}}").split("}}");
   properties = properties.filter(property => {
     return (property.indexOf("<") === -1 
@@ -119,40 +26,171 @@ function extractUsedProperties(skeleton){
   return properties;
 }
 
+function format(skeleton) {
+  //make template more code friendly by removing most whitespaces and line-breaks
+  skeleton = skeleton.replace(/\n/g, "");
+  skeleton = skeleton.split(/\s+/).join(" ");
+  skeleton = skeleton.replace(/{{ /g, "{{").replace(/ }}/g, "}}");
+  return skeleton;  
+}
+
+var ezTemplate = (function() {
+  const TRIES_THRESHOLD = 200;
+  const TRIES_DELAY     = 10;
+  var templates         = new Array();
+
+  function updateReadyTemplates(template) {
+    templates[template.index].template = template; 
+  }
+  
+  var ezConfiguration = (function() {
+    const DEFAULT_FILE_EXTENSION  = '.html';
+    const DEFAULT_FOLDER          = 'static/';
+    const DEFAULT_PRELOAD         = true;
+    const ATTRIBUTE_PRELOAD       = '.preload';
+    const ATTRIBUTE_PATH          = '.path';
+    const ATTRIBUTE_FOR           = '.for';
+
+    var getConfig = function(config, element) {
+      var jsConfig = new JsConfiguration(config);
+      var htmlConfig = new HTMLConfiguration(element);
+      var preload = jsConfig.preload !== undefined ? jsConfig.preload : htmlConfig.preload;
+      preload = preload !== null ? preload : DEFAULT_PRELOAD;
+
+      var path = jsConfig.path !== undefined ? jsConfig.path : htmlConfig.path;
+      path = path !== null ? path : DEFAULT_FOLDER + htmlConfig.tagName + DEFAULT_FILE_EXTENSION;
+
+      var tagName = htmlConfig.tagName;
+      
+      return {
+        preload: preload,
+        path: path,
+        tagName: tagName
+      }
+    }
+
+    function JsConfiguration(jsConfig) {
+      if(jsConfig !== undefined) {
+        this.preload = jsConfig.preload;
+        this.path = jsConfig.path;
+      }
+    }
+
+    function HTMLConfiguration(element) {
+      this.preload = element.getAttribute(ATTRIBUTE_PRELOAD);
+      this.path = element.getAttribute(ATTRIBUTE_PATH);
+      this.tagName = element.tagName.toLowerCase();
+    }
+
+    return {
+      getConfig: getConfig
+    }
+
+  })();
+
+  var inflate = function(selector, template) {
+    var element = document.querySelector(selector);
+    var config = ezConfiguration.getConfig(template.configuration, element);
+    var templateIndex = templates.push({tagName: config.tagName}) - 1;
+    var ezTemplate = {
+      element: element,
+      data: template.data,
+      index: templateIndex
+    }
+    loadFromExternalSource(config, ezTemplate);
+  }
+
+  function loadFromExternalSource(config, ezTemplate){
+    getExternal(config.path, skeleton => {
+      config.skeleton = format(skeleton);
+      var template = buildEzTemplate(ezTemplate).config(config).build();
+      updateReadyTemplates(template);
+    });
+  }
+
+  var getWhenReady = function(target, whenReady, tries = 0) {
+    var ezTemplate = templates.find(template => {
+      return template.tagName === target;
+    });
+    if(ezTemplate.template === undefined){
+      setTimeout(() => {
+        if (tries > TRIES_THRESHOLD) {
+          throw `Could not find '${target}', check your spelling`;
+        }
+        else {
+          getWhenReady(target, whenReady, ++tries);
+        }
+      }, TRIES_DELAY);
+    }
+    else {
+      whenReady(ezTemplate.template);
+    }
+  }
+
+  return {
+    inflate: inflate,
+    getWhenReady: getWhenReady
+  }
+})();
+
+function buildEzTemplate(template){
+  return new EzTemplate(template);
+}
+
 function EzTemplate(template) {
   this.element = template.element;
-  this.ready = template.ready;
-  this.data = new Proxy(template.data, handler);
-
-  //make template more code friendly by removing most whitespaces and line-breaks
-  template.skeleton = template.skeleton.replace(/\n/g, "");
-  template.skeleton = template.skeleton.split(/\s+/).join(" ");
-  template.skeleton = template.skeleton.replace(/{{ /g, "{{").replace(/ }}/g, "}}");
-  
-  this.skeleton = template.skeleton;
-  this.properties = extractUsedProperties(this.skeleton);
+  this.index = template.index;
+  this.data = template.data;
+  this.proxy = new Proxy(this, getLiveHandler(this));
 } 
+
+EzTemplate.prototype.config = function(config){
+  this.config = config;
+  return this;
+}
+
+EzTemplate.prototype.build = function() {
+  this.loadSettings();
+  return this;
+}
+
+function getLiveHandler(parent) {
+  return {
+    get(target, key) {
+      if (typeof target[key] === 'object' && target[key] !== null) {
+        return new Proxy(target[key], getLiveHandler(parent));
+      } else {
+        return target[key];
+      }
+    },
+    set: function(object, property, value) {
+      object[property] = value;
+      parent.refreshContent();
+    }
+  }
+}
+
+function toBoolean(string) {
+  return string == 'true';
+}
+
+EzTemplate.prototype.loadSettings = function() {
+  var preload = this.config.preload;
+  if(typeof preload === 'string') {
+    preload = toBoolean(preload);
+  }
+  if(preload) {
+    this.refreshContent();
+  }
+}
 
 EzTemplate.prototype.putContent = function(rawContent, property, value) {
    return rawContent.replace("{{" + property + "}}", value);
 }
 
-
 EzTemplate.prototype.refreshContent = function() {
-  console.log(this.skeleton);
-  this.element.innerHTML = this.skeleton;
+  this.element.innerHTML = this.config.skeleton;
   this.handleDeepProperties(this.element.getElementsByTagName('*'));
-  /*this.properties.forEach(property => {
-    let value = this.data;
-    
-    let parts = property.split(".");
-    parts.forEach(part => {
-      value = value[part];
-    });
-  
-    this.putContent(property, value);
-  });
-  expandOnFor(this.element.querySelector('*'));*/
 }
 
 EzTemplate.prototype.handleDeepProperties = function(childElements) {
@@ -162,6 +200,8 @@ EzTemplate.prototype.handleDeepProperties = function(childElements) {
 
     var forAttribute = childElement.getAttribute('.for');
     if(forAttribute !== null) {
+      forAttribute = forAttribute.replace(/ /g, "").split("_");
+/*
       var arrayStartIndex = forAttribute.lastIndexOf(' ');
       var arrayName = forAttribute.substr(arrayStartIndex).trim();
 
@@ -169,11 +209,14 @@ EzTemplate.prototype.handleDeepProperties = function(childElements) {
       var propertyName = forAttribute.substr(propertyStartIndex).trim();
       var propertyEndIndex = propertyName.indexOf(' ');
       var propertyName = propertyName.substr(0, propertyEndIndex);
-
+*/
+      var indexName = forAttribute[2];
+      var arrayName = forAttribute[1];
+      var propertyName = forAttribute[0];
       var childContent = childElement.innerHTML;
       while (childElement.firstChild) childElement.removeChild(childElement.firstChild); //empty childElement
-      var properties = extractUsedProperties(childContent);
-
+      
+      var properties = extractProperties(childContent);
       this.data[arrayName].forEach(value => {
         properties.forEach(property => {
           let parts = property.split(".");
@@ -189,7 +232,8 @@ EzTemplate.prototype.handleDeepProperties = function(childElements) {
       });
     }
     else {
-      this.properties.forEach(property => {
+      var properties = extractProperties(childElement.firstChild.nodeValue);
+      properties.forEach(property => {
         let value = this.data;
         
         let parts = property.split(".");
