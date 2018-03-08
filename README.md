@@ -69,7 +69,7 @@ ez.getWhenReady('app-header', (template) => {
   person.name = "anders";
 
   //Must be called to reflect changes
-  template.refreshContent();
+  template.refreshAll();
 });
 ```
 ### With JS configurations (same header template)
@@ -110,7 +110,7 @@ ez.inflate('app-header', {
     ]
   },
   configuration: {
-    preload: true,   //change to false to preload content or de-comment template.refreshContent() below
+    preload: true,   //change to false to preload content or de-comment template.refreshAll() below
     path: 'static/app-header.html' //Default is tagname + .html under static folder
   }
 });
@@ -119,7 +119,7 @@ ez.getWhenReady('app-header', (template) => {
   var person = template.data.person;
   person.name = "anders";
 
-  //template.refreshContent();
+  //template.refreshAll();
 });
 ```
 
@@ -148,20 +148,20 @@ ez.inflate('app-header', {
     ]
   },
   configuration: {
-    preload: true,   //change to false to preload content or de-comment template.refreshContent() below
+    preload: true,   //change to false to preload content or de-comment template.refreshAll() below
     path: 'static/app-header.html' //Default is tagname + .html under static folder
   }
 });
 
-//Sometimes it can be annoying to call refreshContent for minor updates, using proxies instead will automatically reflect changes to the view and also sync to non-proxy template data
+//Sometimes it can be annoying to call refreshAll for minor updates, using proxies instead will automatically reflect changes to the view and also sync to non-proxy template data
 ez.getWhenReady('app-header', (template) => {
   var person = template.data.person;
-  person.name = "anders"; //this won't sync until you call refreshContent
+  person.name = "anders"; //this won't sync until you call refreshAll
 
   var proxyPerson = template.proxy.data.person;
   proxyPerson.name = 'Jakob'; //Will automatically refresh all content, also overwrites any previous changes made to the same property in the non-proxy instance
 
-  //template.refreshContent();
+  //template.refreshAll();
 });
 ```
 
