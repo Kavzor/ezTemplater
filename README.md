@@ -26,20 +26,20 @@ static/app-header.html
 <header>
   {{ person.name }} {{ person.details.age }}
   
-  <ul .for="fruit_fruites">
+  <ul .for="fruit/fruites">
     <li>{{fruit.age}} : {{fruit.name}}</li>
   </ul>
 </header>
 
 
-<div .for="fruit_fruites">
+<div .for="fruit/fruites">
   <a href="{{fruit.name}}">{{fruit.name}}</a>
 </div>
 ```
 
 app.js
 ```javascript
-ezTemplate.inflate('app-header', {
+ez.inflate('app-header', {
   data: {
       person: {
       name: "jakob",
@@ -64,7 +64,7 @@ ezTemplate.inflate('app-header', {
 });
 
 //Will be called when the template is fully instansiated
-ezTemplate.getWhenReady('app-header', (template) => {
+ez.getWhenReady('app-header', (template) => {
   var person = template.data.person;
   person.name = "anders";
 
@@ -87,7 +87,7 @@ index.html
 
 app.js
 ```javascript
-ezTemplate.inflate('app-header', {
+ez.inflate('app-header', {
   data: {
       person: {
       name: "jakob",
@@ -115,7 +115,7 @@ ezTemplate.inflate('app-header', {
   }
 });
 
-ezTemplate.getWhenReady('app-header', (template) => {
+ez.getWhenReady('app-header', (template) => {
   var person = template.data.person;
   person.name = "anders";
 
@@ -125,7 +125,7 @@ ezTemplate.getWhenReady('app-header', (template) => {
 
 app.js with proxies
 ```javascript
-ezTemplate.inflate('app-header', {
+ez.inflate('app-header', {
   data: {
       person: {
       name: "jakob",
@@ -154,7 +154,7 @@ ezTemplate.inflate('app-header', {
 });
 
 //Sometimes it can be annoying to call refreshContent for minor updates, using proxies instead will automatically reflect changes to the view and also sync to non-proxy template data
-ezTemplate.getWhenReady('app-header', (template) => {
+ez.getWhenReady('app-header', (template) => {
   var person = template.data.person;
   person.name = "anders"; //this won't sync until you call refreshContent
 

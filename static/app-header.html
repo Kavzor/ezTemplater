@@ -1,13 +1,21 @@
 <header>
   {{ person.name }} {{ person.details.age }}
   
-  <ul .for="fruit_fruites">
+  <ul .for="fruit/fruites/index">
     <li>{{fruit.age}} : {{fruit.name}}</li>
   </ul>
 </header>
 
 
-<div .for="fruit_fruites">
-  <a href="{{fruit.name}}">{{fruit.name}}</a>
+<div .for="fruit/fruites">
+  <a href="{{fruit.link}}">{{fruit.name}}</a>
 </div>
+
+<form .model="person">
+  <div>
+    <label>Persons name</label>
+    <input name="name">
+  </div>
+  <button>Submit</button>
+</form>
 

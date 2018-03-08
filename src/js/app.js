@@ -1,4 +1,4 @@
-ezTemplate.inflate('app-header', {
+ez.inflate('app-header', {
   data: {
       person: {
       name: "jakob",
@@ -12,11 +12,13 @@ ezTemplate.inflate('app-header', {
     fruites: [
       {
         name: 'apple',
-        age: 32
+        age: 32,
+        link: "https://google.com?q=fruit"
       },
       {
         name: 'pineapple',
-        age: 12
+        age: 12,
+        link: "https://google.com?q=fruit"
       }
     ]
   },
@@ -26,10 +28,9 @@ ezTemplate.inflate('app-header', {
   }
 });
 
-ezTemplate.getWhenReady('app-header', (template) => {
+ez.getWhenReady('app-header', (template) => {
   var person = template.data.person;
-  var proxyPerson = template.proxy.data.person;
+  var proxyFruites = template.data.fruites;
   
-  
-  template.refreshContent();
+  template.refreshAll();
 });

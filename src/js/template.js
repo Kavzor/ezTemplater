@@ -1,5 +1,16 @@
 'use strict';
 
+function isForElement(element) {
+  return element.getAttribute('.for') !== null;
+}
+
+function isFormElement(element) {
+  return element.getAttribute('.model') !== null;
+}
+
+function toBoolean(string) {
+  return string == 'true';
+}
 
 function getExternal(path, callback) {
   var ajax = new XMLHttpRequest();
@@ -34,15 +45,15 @@ function format(skeleton) {
   return skeleton;  
 }
 
-var ezTemplate = (function() {
+var ez = (function() {
   const TRIES_THRESHOLD = 200;
   const TRIES_DELAY     = 10;
   var templates         = new Array();
-
+  
   function updateReadyTemplates(template) {
     templates[template.index].template = template; 
   }
-  
+
   var ezConfiguration = (function() {
     const DEFAULT_FILE_EXTENSION  = '.html';
     const DEFAULT_FOLDER          = 'static/';
@@ -100,10 +111,11 @@ var ezTemplate = (function() {
     loadFromExternalSource(config, ezTemplate);
   }
 
-  function loadFromExternalSource(config, ezTemplate){
+  function loadFromExternalSource(config, template){
     getExternal(config.path, skeleton => {
       config.skeleton = format(skeleton);
-      var template = buildEzTemplate(ezTemplate).config(config).build();
+      template = ezTemplate.build(template).config(config).load();
+
       updateReadyTemplates(template);
     });
   }
@@ -133,119 +145,218 @@ var ezTemplate = (function() {
   }
 })();
 
-function buildEzTemplate(template){
-  return new EzTemplate(template);
-}
 
-function EzTemplate(template) {
-  this.element = template.element;
-  this.index = template.index;
-  this.data = template.data;
-  this.proxy = new Proxy(this, getLiveHandler(this));
-} 
+var ezParser = (function() {
+  const TYPE_FOR = "element_for";
+  const TYPE_TEXT = "element_text";
+  const TYPE_FORM = "element_form";
 
-EzTemplate.prototype.config = function(config){
-  this.config = config;
-  return this;
-}
+  var prepare = function(ezTemplate) {
+    return new EzParser(ezTemplate);
+  }
 
-EzTemplate.prototype.build = function() {
-  this.loadSettings();
-  return this;
-}
+  function EzParser(ezTemplate) {
+    this.ezTemplate = ezTemplate;
+    this.forExpressions = new Array();
+    this.textExpressions = new Array();
+    this.eventExpressions = new Array();
+    this.formExpressions = new Array();
+  }
 
-function getLiveHandler(parent) {
-  return {
-    get(target, key) {
-      if (typeof target[key] === 'object' && target[key] !== null) {
-        return new Proxy(target[key], getLiveHandler(parent));
-      } else {
-        return target[key];
-      }
-    },
-    set: function(object, property, value) {
-      object[property] = value;
-      parent.refreshContent();
+  EzParser.prototype.addElement = function(type, element) {
+    switch(type) {
+      case TYPE_FOR: 
+        this.forExpressions.push(element);
+      break;
+      case TYPE_TEXT: 
+        this.textExpressions.push(element);
+      break;
+      case TYPE_FORM:
+        this.formExpressions.push(element);
+      break;
     }
   }
-}
 
-function toBoolean(string) {
-  return string == 'true';
-}
-
-EzTemplate.prototype.loadSettings = function() {
-  var preload = this.config.preload;
-  if(typeof preload === 'string') {
-    preload = toBoolean(preload);
+  return {
+    prepare: prepare,
+    TYPE_FOR: TYPE_FOR,
+    TYPE_TEXT: TYPE_TEXT,
+    TYPE_FORM: TYPE_FORM
   }
-  if(preload) {
-    this.refreshContent();
+  
+})();
+
+var ezPage = (function() {
+  function putTextContent(data, properties, content, reference) {
+    properties.forEach(property => {
+      let parts = property.split(".");
+      let value = data;
+      parts.forEach(part => {
+        if(part !== reference) {
+          value = value[part];
+        }
+      });
+        content = content.replace('{{' + property + '}}', value);
+    });
+    return content;
   }
-}
 
-EzTemplate.prototype.putContent = function(rawContent, property, value) {
-   return rawContent.replace("{{" + property + "}}", value);
-}
+  var refreshForElements = function(forExpressions) {
+    forExpressions.forEach(forExpression => {
+      var element = forExpression.element;
+      var name = forExpression.array.name;
+      var reference = forExpression.array.reference;
+      var properties = forExpression.properties;
+      var data = forExpression.data;
+      let content = forExpression.skeleton;
 
-EzTemplate.prototype.refreshContent = function() {
-  this.element.innerHTML = this.config.skeleton;
-  this.handleDeepProperties(this.element.getElementsByTagName('*'));
-}
+      while (element.firstChild) element.removeChild(element.firstChild); //empty childElement
 
-EzTemplate.prototype.handleDeepProperties = function(childElements) {
-  for(let index = 0; index < childElements.length; index++) {
-    var childElement = childElements[index];
-    var content = childElement.firstChild.nodeValue;
 
-    var forAttribute = childElement.getAttribute('.for');
-    if(forAttribute !== null) {
-      forAttribute = forAttribute.replace(/ /g, "").split("_");
-/*
-      var arrayStartIndex = forAttribute.lastIndexOf(' ');
-      var arrayName = forAttribute.substr(arrayStartIndex).trim();
+      data.forEach(value => {
+        var rowValue = putTextContent(value, properties, content, reference);
+        element.innerHTML += rowValue;
+      });
+    });
+  }
 
-      var propertyStartIndex = forAttribute.indexOf(' ');
-      var propertyName = forAttribute.substr(propertyStartIndex).trim();
-      var propertyEndIndex = propertyName.indexOf(' ');
-      var propertyName = propertyName.substr(0, propertyEndIndex);
-*/
-      var indexName = forAttribute[2];
-      var arrayName = forAttribute[1];
-      var propertyName = forAttribute[0];
-      var childContent = childElement.innerHTML;
-      while (childElement.firstChild) childElement.removeChild(childElement.firstChild); //empty childElement
+  var refreshTextElements = function(textExpressions) {
+    textExpressions.forEach(textExpression => {
+      textExpression.element.firstChild.nodeValue = textExpression.skeleton;
       
-      var properties = extractProperties(childContent);
-      this.data[arrayName].forEach(value => {
-        properties.forEach(property => {
-          let parts = property.split(".");
-          let item = value;
-          parts.forEach(part => {
-            if(part !== propertyName){
-              item = item[part];
+      var data = textExpression.data;
+      var properties = textExpression.properties;
+      var element = textExpression.element;
+      var content = textExpression.element.firstChild.nodeValue;
+    
+
+      textExpression.element.firstChild.nodeValue = putTextContent(data, properties, content);
+    });
+  }
+
+  return {
+    refreshTextElements: refreshTextElements,
+    refreshForElements: refreshForElements
+  }
+})();
+
+
+
+var ezTemplate = (function() {
+  const ARRAY_VAR_POS   = 0;
+  const ARRAY_NAME_POS  = 1;
+  const ARRAY_INDEX_POS = 2;
+  
+  var build = function(template){
+    return new EzTemplate(template);
+  }
+  
+  function EzTemplate(template) {
+    this.element = template.element;
+    this.index = template.index;
+    this.data = template.data;
+    this.proxy = new Proxy(this, this.getDataHandler());
+    this.parser = ezParser.prepare(this);
+    this.ezIndex = 0;
+  } 
+  EzTemplate.prototype.config = function(config){
+    this.config = config;
+    return this;
+  }
+  EzTemplate.prototype.load = function() {
+    this.element.innerHTML = this.config.skeleton; //load elements, else you won't be able to parse
+    this.prepareParser(this.element.getElementsByTagName('*'));
+    this.loadSettings();
+    return this;
+  }
+  
+  EzTemplate.prototype.loadSettings = function() {
+    var preload = this.config.preload;
+    if(typeof preload === 'string') {
+      preload = toBoolean(preload);
+    }
+    if(preload) {
+      this.refreshAll();
+    }
+  }
+  
+  EzTemplate.prototype.refreshAll = function() {
+    ezPage.refreshForElements(this.parser.forExpressions);
+    ezPage.refreshTextElements(this.parser.textExpressions);
+  }
+  EzTemplate.prototype.handleFormElements = function(model, elements) {
+    for(let index = 0; index < elements.length; index++) {
+      var element = elements[index];
+      var name = element.getAttribute('name');
+      if(name !== null) {
+        console.log(this.data[model][name]);
+      }
+    }
+  }
+
+  EzTemplate.prototype.prepareParser = function(childElements) {
+    for(let index = 0; index < childElements.length; index++) {
+      let childElement = childElements[index];
+      if(isFormElement(childElement)) {
+        let formAttribute = childElement.getAttribute('.model');
+        let formElements = childElement.getElementsByTagName('*');
+        index += formElements.length;
+        this.handleFormElements(formAttribute, formElements);
+      }
+      else {
+        let content = isForElement(childElement) ? childElement.innerHTML : childElement.firstChild.nodeValue;
+        let properties = extractProperties(content);
+    
+        if(isForElement(childElement)) {
+          let forAttribute = childElement.getAttribute('.for');
+          index += childElement.childElementCount;
+    
+          forAttribute = forAttribute.replace(/ /g, "").split("/");
+          this.parser.addElement(ezParser.TYPE_FOR, {
+            element: childElement,
+            skeleton:   childElement.innerHTML,
+            properties: properties,
+            ezIndex:    this.ezIndex++,
+            data:       this.data[forAttribute[ARRAY_NAME_POS]],
+            array: {
+              name:       forAttribute[ARRAY_NAME_POS],
+              reference:  forAttribute[ARRAY_VAR_POS],
+              index:      forAttribute[ARRAY_INDEX_POS]
             }
           });
-          childContent = childContent.replace('{{' + property + '}}', item);
-        });
-        childElement.innerHTML += childContent; 
-      });
+        }
+        else {
+          this.parser.addElement(ezParser.TYPE_TEXT, {
+            element: childElement,
+            data: this.data,
+            properties: properties,
+            skeleton: content,
+            ezIndex: this.ezIndex++
+          });
+        }
+      
+      }
     }
-    else {
-      var properties = extractProperties(childElement.firstChild.nodeValue);
-      properties.forEach(property => {
-        let value = this.data;
-        
-        let parts = property.split(".");
-        parts.forEach(part => {
-          if(value !== undefined){
-            value = value[part];
-          }
-        });
+  }
+  
+  EzTemplate.prototype.getDataHandler = function() {
+    var ezTemplate = this;
+    return {
+      get(target, key) {
+        if (typeof target[key] === 'object' && target[key] !== null) {
+          return new Proxy(target[key], ezTemplate.getDataHandler());
+        } else {
+          return target[key];
+        }
+      },
+      set: function(object, property, value) {
+        object[property] = value;
+        ezTemplate.refreshAll();
+      }
+    }
+  }
 
-        content = this.putContent(content, property, value);
-        childElement.firstChild.nodeValue = content;
-      });
-    }
-  } 
-}
+  return {
+    build: build
+  }
+})();
